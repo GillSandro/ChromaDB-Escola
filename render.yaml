@@ -5,7 +5,8 @@ services:
     plan: free
     dockerfilePath: ./Dockerfile
     envVars:
+      - key: PORT
+        value: 8000
       - key: ALLOW_RESET
         value: true
-      - key: CHROMA_SERVER_AUTH_CREDENTIALS
-        value: escola123_segura
+
