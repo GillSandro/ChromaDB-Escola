@@ -4,7 +4,8 @@ services:
     env: docker
     plan: free
     dockerfilePath: ./Dockerfile
-    healthCheckPath: /api/v1/heartbeat
     envVars:
       - key: ALLOW_RESET
-        value: "true"
+        value: true
+      - key: CHROMA_SERVER_AUTH_CREDENTIALS
+        value: escola123_segura
