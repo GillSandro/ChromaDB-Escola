@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: chromadb-escola
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/v1/heartbeat
+    envVars:
+      - key: ALLOW_RESET
+        value: "true"
