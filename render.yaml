@@ -5,8 +5,15 @@ services:
     plan: free
     dockerfilePath: ./Dockerfile
     envVars:
-      - key: PORT
-        value: 8000
       - key: ALLOW_RESET
-        value: true
+        value: "true"
+
+      - key: CHROMA_SERVER_HTTP_PORT
+        value: "8000"
+
+      - key: CHROMA_SERVER_CORS_ALLOW_ORIGINS
+        value: "*"
+
+      - key: CHROMA_API_IMPL
+        value: "chromadb.api.fastapi.FastAPI"
 
