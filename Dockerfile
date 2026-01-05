@@ -3,7 +3,7 @@ FROM python:3.11-slim-bookworm
 # Instalar ChromaDB diretamente via pip
 RUN pip install chromadb
 
-# Variáveis de ambiente do ChromaDB - CORRIGIDAS
+# Variáveis de ambiente do ChromaDB
 ENV CHROMA_SERVER_HOST=0.0.0.0
 ENV CHROMA_SERVER_HTTP_PORT=8000
 ENV CHROMA_SERVER_CORS_ALLOW_ORIGINS=
@@ -25,8 +25,8 @@ RUN mkdir -p /app/scripts /data
 
 WORKDIR /app
 
-# Copiar TUDO do diretório atual para /app
-COPY . .
+# Copiar scripts de backup PRIMEIRO
+COPY scripts/ ./scripts/
 
 # Dar permissão de execução
 RUN chmod +x /app/scripts/entrypoint.sh
@@ -35,8 +35,8 @@ RUN chmod +x /app/scripts/entrypoint.sh
 WORKDIR /app/scripts
 RUN npm init -y && npm install chromadb
 
-# Voltar para diretório raiz do app
+# Voltar para diretório raiz
 WORKDIR /app
 
-# Script de inicialização que executa restore e inicia ChromaDB
-CMD ["sh", "-c", "node scripts/github-backup.js restore && chroma run --host 0.0.0.0 --port 8000 --path /data"]
+# Usar entrypoint.sh como script de inicialização
+ENTRYPOINT ["/app/scripts/entrypoint.sh"]
