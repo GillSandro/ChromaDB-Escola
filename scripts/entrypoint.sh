@@ -12,11 +12,7 @@ echo "========================================="
 # Criar diretório de dados
 mkdir -p /data
 
-# Executar RESTORE do backup GitHub antes de iniciar
-echo "🔄 Restaurando dados do GitHub..."
-node /app/scripts/github-backup.js restore
-
-# Iniciar ChromaDB
+# Iniciar ChromaDB (agora com python/chromadb instalado via pip)
 echo "⚡ Iniciando ChromaDB..."
 uvicorn chromadb.app:app --host 0.0.0.0 --port 8000 --workers 1 &
 
@@ -32,6 +28,11 @@ else
     echo "⚠️  Aguardando mais 10 segundos..."
     sleep 10
 fi
+
+# Iniciar sistema de backup
+echo "🔧 Iniciando sistema de backup GitHub..."
+cd /app/scripts
+node github-backup.js check
 
 echo "========================================="
 echo "✅ SISTEMA OPERACIONAL"
