@@ -2,45 +2,20 @@
 set -e
 
 echo "========================================="
-echo "🚀 CHROMADB COM BACKUP GITHUB - IMAGEM PYTHON"
+echo "🚀 INICIANDO CHROMADB"
 echo "========================================="
-echo "📁 Backup repo: GillSandro/Vetor_escola_bck"
-echo "💾 Dados em: /data"
-echo "🌐 URL: http://localhost:8000"
-echo "========================================="
+
+# Remover variável problemática
+unset CHROMA_SERVER_CORS_ALLOW_ORIGINS
 
 # Criar diretório de dados
 mkdir -p /data
 
-# Iniciar ChromaDB (agora com python/chromadb instalado via pip)
-echo "⚡ Iniciando ChromaDB..."
-uvicorn chromadb.app:app --host 0.0.0.0 --port 8000 --workers 1 &
-
-# Aguardar iniciar
-echo "⏳ Aguardando ChromaDB iniciar (20 segundos)..."
-sleep 20
-
-# Verificar
-echo "🔍 Testando conexão..."
-if curl -s -f http://localhost:8000/api/v1/heartbeat > /dev/null 2>&1; then
-    echo "✅ ChromaDB ONLINE!"
-else
-    echo "⚠️  Aguardando mais 10 segundos..."
-    sleep 10
-fi
-
-# Iniciar sistema de backup
-echo "🔧 Iniciando sistema de backup GitHub..."
+# Verificar ChromaDB (nosso NOVO script)
+echo "🔧 Executando verificação..."
 cd /app/scripts
 node github-backup.js check
 
-echo "========================================="
-echo "✅ SISTEMA OPERACIONAL"
-echo "========================================="
-echo "ChromaDB: http://localhost:8000"
-echo "Backup: automático a cada 2h"
-echo "Repo: GillSandro/Vetor_escola_bck"
-echo "========================================="
-
-# Manter container vivo
-exec tail -f /dev/null
+# Iniciar ChromaDB
+echo "⚡ Iniciando servidor ChromaDB..."
+exec chroma run --host 0.0.0.0 --port 8000 --path /data
