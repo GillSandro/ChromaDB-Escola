@@ -1,14 +1,13 @@
 FROM chromadb/chroma:latest
 
+# Variáveis de ambiente do ChromaDB
 ENV CHROMA_SERVER_HOST=0.0.0.0
 ENV CHROMA_SERVER_HTTP_PORT=8000
 ENV CHROMA_SERVER_CORS_ALLOW_ORIGINS=*
 ENV ALLOW_RESET=true
+ENV PERSIST_DIRECTORY=/data
 
 EXPOSE 8000
-
-CMD ["uvicorn", "chromadb.app:app", "--host", "0.0.0.0", "--port", "8000"]
-# ==================== SISTEMA DE BACKUP ====================
 
 # Instalar Node.js e dependências para backup
 USER root
@@ -16,6 +15,8 @@ RUN apt-get update && apt-get install -y \
     nodejs \
     npm \
     git \
+    wget \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Criar diretório para scripts de backup
@@ -34,9 +35,7 @@ RUN npm init -y && npm install chromadb axios
 # Voltar para o diretório do Chroma
 WORKDIR /chroma
 
-# Script de inicialização melhorado
-COPY --from=0 /app/scripts/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
+# Script de inicialização
+ENTRYPOINT ["/app/scripts/entrypoint.sh"]
 # Usar entrypoint personalizado
 ENTRYPOINT ["/entrypoint.sh"]
