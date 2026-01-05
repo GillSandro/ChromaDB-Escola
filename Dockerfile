@@ -8,3 +8,35 @@ ENV ALLOW_RESET=true
 EXPOSE 8000
 
 CMD ["chroma", "run"]
+# ==================== SISTEMA DE BACKUP ====================
+
+# Instalar Node.js e dependências para backup
+USER root
+RUN apt-get update && apt-get install -y \
+    nodejs \
+    npm \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Criar diretório para scripts de backup
+RUN mkdir -p /app/scripts
+
+# Copiar scripts de backup
+COPY scripts/ /app/scripts/
+
+# Dar permissão de execução
+RUN chmod +x /app/scripts/entrypoint.sh
+
+# Instalar dependências Node.js para backup
+WORKDIR /app/scripts
+RUN npm init -y && npm install chromadb axios
+
+# Voltar para o diretório do Chroma
+WORKDIR /chroma
+
+# Script de inicialização melhorado
+COPY --from=0 /app/scripts/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Usar entrypoint personalizado
+ENTRYPOINT ["/entrypoint.sh"]
