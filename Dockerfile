@@ -37,5 +37,4 @@ WORKDIR /chroma
 
 # Script de inicialização
 ENTRYPOINT ["/app/scripts/entrypoint.sh"]
-# Usar entrypoint personalizado
-ENTRYPOINT ["/entrypoint.sh"]
+
