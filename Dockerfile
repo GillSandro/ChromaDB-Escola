@@ -7,7 +7,7 @@ ENV ALLOW_RESET=true
 
 EXPOSE 8000
 
-CMD ["chroma", "run"]
+CMD ["uvicorn", "chromadb.app:app", "--host", "0.0.0.0", "--port", "8000"]
 # ==================== SISTEMA DE BACKUP ====================
 
 # Instalar Node.js e dependências para backup
