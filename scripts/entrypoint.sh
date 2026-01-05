@@ -1,6 +1,14 @@
 #!/bin/sh
 set -e
 
+echo "🕒 DEPLOY TIMESTAMP: $(date)"  # ← ADICIONE ESTA LINHA
+echo "========================================="
+echo "🚀 INICIANDO CHROMADB"
+echo "========================================="
+
+#!/bin/sh
+set -e
+
 echo "========================================="
 echo "🚀 INICIANDO CHROMADB"
 echo "========================================="
