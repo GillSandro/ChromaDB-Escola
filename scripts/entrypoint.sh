@@ -6,7 +6,7 @@ echo "📁 Repositório: GillSandro/Vetor_escola_bck"
 
 # Iniciar ChromaDB em segundo plano
 echo "⚡ Iniciando ChromaDB..."
-chroma run --path /data/chroma --host 0.0.0.0 --port 8000 &
+uvicorn chromadb.app:app --host 0.0.0.0 --port 8000 &
 
 # Aguardar ChromaDB iniciar
 echo "⏳ Aguardando ChromaDB iniciar (15 segundos)..."
