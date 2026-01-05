@@ -13,11 +13,18 @@ class GitHubBackupChroma {
     this.config = {};
     this.localPath = '/tmp/chroma-backup';
     this.backupFile = 'chroma_data.json';
+    this.repoUrl = null;
   }
 
   async carregarConfig() {
+    console.log('🔍 Carregando configurações...');
+    
+    // INICIALIZAR config vazio
+    this.config = {};
+    this.repoUrl = null;
+
     try {
-      // 1. Tentar carregar do Secret File do Render
+      // 1. Tentar carregar do Secret File do Render (para versões que têm)
       const secretPath = '/etc/secrets/.chroma-backup.env';
       try {
         const content = await fs.readFile(secretPath, 'utf8');
@@ -29,43 +36,42 @@ class GitHubBackupChroma {
         });
         console.log('✅ Configuração carregada do Secret File');
       } catch (fileError) {
-        console.log('⚠️  Secret File não encontrado, usando variáveis de ambiente');
+        // Ignorar se não existir - é normal no Render Free
+        console.log('ℹ️  Secret File não encontrado (normal no Render Free)');
       }
     } catch (error) {
-      console.error('❌ Erro ao ler configuração:', error.message);
+      console.log('⚠️  Erro ao tentar ler Secret File:', error.message);
     }
 
-    // 2. Fallback para variáveis de ambiente (sobrescrevendo valores do arquivo se necessário)
-   this.config = {
-    GITHUB_TOKEN: process.env.GITHUB_TOKEN,
-    GITHUB_REPO: process.env.GITHUB_REPO || 'GillSandro/Vetor_escola_bck',
-    ALLOW_RESET: process.env.ALLOW_RESET || 'true',
-    CHROMA_HOST: process.env.CHROMA_HOST || 'localhost',
-    CHROMA_PORT: process.env.CHROMA_PORT || '8000'
-  };
-    // Combinar configurações (variáveis de ambiente têm prioridade)
+    // 2. Variáveis de ambiente (SOBRESCREVEM Secret File)
+    const envConfig = {
+      GITHUB_TOKEN: process.env.GITHUB_TOKEN,
+      GITHUB_REPO: process.env.GITHUB_REPO || 'GillSandro/Vetor_escola_bck',
+      ALLOW_RESET: process.env.ALLOW_RESET || 'true',
+      CHROMA_HOST: process.env.CHROMA_HOST || 'localhost',
+      CHROMA_PORT: process.env.CHROMA_PORT || '8000'
+    };
+
+    // Combinar (variáveis de ambiente têm prioridade)
     this.config = { ...this.config, ...envConfig };
 
-    // Validar configuração
-    if (!this.config.GITHUB_TOKEN) {
-    console.error('❌ GITHUB_TOKEN não configurado!');
-    console.error('💡 Configure no Render: Settings → Environment → Add GITHUB_TOKEN');
-    throw new Error('GITHUB_TOKEN não configurado');
-  }
+    console.log('📊 Configurações finais:');
+    console.log(`   - Repositório: ${this.config.GITHUB_REPO}`);
+    console.log(`   - Token: ${this.config.GITHUB_TOKEN ? 'PRESENTE' : 'AUSENTE'}`);
+    console.log(`   - Chroma: ${this.config.CHROMA_HOST}:${this.config.CHROMA_PORT}`);
 
-    // Garantir que o repositório tenha formato correto
-    if (!this.config.GITHUB_REPO.includes('/')) {
-      throw new Error('GITHUB_REPO deve estar no formato "usuario/repositorio"');
+    // Se tem token, configura URL do repositório
+    if (this.config.GITHUB_TOKEN) {
+      this.repoUrl = `https://${this.config.GITHUB_TOKEN}@github.com/${this.config.GITHUB_REPO}.git`;
+      console.log('🔗 Backup/restore HABILITADO');
+    } else {
+      console.log('⚠️  GITHUB_TOKEN não configurado');
+      console.log('💡 Backup/restore DESABILITADO');
+      console.log('💡 Para habilitar, adicione GITHUB_TOKEN nas variáveis de ambiente');
     }
 
-    this.repoUrl = `https://${this.config.GITHUB_TOKEN}@github.com/${this.config.GITHUB_REPO}.git`;
-  
-  console.log(`📁 Repositório: ${this.config.GITHUB_REPO}`);
-  console.log(`🔑 Token: ${this.config.GITHUB_TOKEN ? '✔️ Configurado' : '❌ Ausente'}`);
-  console.log(`🌐 Chroma: ${this.config.CHROMA_HOST}:${this.config.CHROMA_PORT}`);
-  
-  return this.config;
-}
+    return this.config;
+  }
 
   async executarComando(cmd, cwd = this.localPath) {
     try {
@@ -87,6 +93,12 @@ class GitHubBackupChroma {
   }
 
   async atualizarRepo() {
+    // Se não tem repoUrl (sem token), não tenta git
+    if (!this.repoUrl) {
+      console.log('⚠️  Sem GITHUB_TOKEN - Pulando operações git');
+      return false;
+    }
+    
     try {
       await fs.access(this.localPath);
       console.log('🔄 Atualizando repositório local...');
@@ -120,6 +132,12 @@ class GitHubBackupChroma {
   }
 
   async salvarBackupNoGitHub(dados) {
+    // Se não tem repoUrl (sem token), não tenta salvar
+    if (!this.repoUrl) {
+      console.log('⚠️  Sem GITHUB_TOKEN - Pulando salvamento no GitHub');
+      return false;
+    }
+    
     try {
       console.log('💾 Salvando backup no GitHub...');
       const backupPath = path.join(this.localPath, this.backupFile);
@@ -172,6 +190,12 @@ class GitHubBackupChroma {
     console.log('💾 Iniciando backup do ChromaDB...');
     
     await this.carregarConfig();
+    
+    // Se não tem token, não faz backup
+    if (!this.config.GITHUB_TOKEN || !this.repoUrl) {
+      console.log('⚠️  GITHUB_TOKEN não configurado - Pulando backup');
+      return null;
+    }
     
     const client = new ChromaClient({
       host: this.config.CHROMA_HOST,
@@ -241,8 +265,17 @@ class GitHubBackupChroma {
     
     await this.carregarConfig();
     
+    // SE não tem token ou repoUrl, retorna 0
+    if (!this.config.GITHUB_TOKEN || !this.repoUrl) {
+      console.log('⚠️  GITHUB_TOKEN não configurado - Pulando restauração');
+      return 0;
+    }
+    
     try {
-      await this.atualizarRepo();
+      const atualizado = await this.atualizarRepo();
+      if (!atualizado) {
+        return 0;
+      }
       
       const backupPath = path.join(this.localPath, this.backupFile);
       const data = await fs.readFile(backupPath, 'utf8');
@@ -320,6 +353,26 @@ class GitHubBackupChroma {
     console.log('🔍 Verificando estado do ChromaDB...');
     
     await this.carregarConfig();
+    
+    // Se não tem token, só verifica local
+    if (!this.config.GITHUB_TOKEN || !this.repoUrl) {
+      console.log('⚠️  Sem GITHUB_TOKEN - Apenas verificando ChromaDB local');
+      
+      try {
+        const client = new ChromaClient({
+          host: this.config.CHROMA_HOST,
+          port: this.config.CHROMA_PORT,
+        });
+        
+        const colecoes = await client.listCollections();
+        console.log(`📊 ChromaDB local: ${colecoes.length} coleções`);
+        return true; // Retorna true mesmo se vazio
+        
+      } catch (error) {
+        console.log('⚠️  ChromaDB não acessível ou vazio');
+        return false;
+      }
+    }
     
     const client = new ChromaClient({
       host: this.config.CHROMA_HOST,
