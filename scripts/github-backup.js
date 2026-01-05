@@ -36,21 +36,22 @@ class GitHubBackupChroma {
     }
 
     // 2. Fallback para variáveis de ambiente (sobrescrevendo valores do arquivo se necessário)
-    const envConfig = {
-      GITHUB_TOKEN: process.env.GITHUB_TOKEN,
-      GITHUB_REPO: process.env.GITHUB_REPO || 'GillSandro/Vetor_escola_bck',
-      ALLOW_RESET: process.env.ALLOW_RESET || 'true',
-      CHROMA_HOST: process.env.CHROMA_HOST || 'localhost',
-      CHROMA_PORT: process.env.CHROMA_PORT || '8000'
-    };
-
+   this.config = {
+    GITHUB_TOKEN: process.env.GITHUB_TOKEN,
+    GITHUB_REPO: process.env.GITHUB_REPO || 'GillSandro/Vetor_escola_bck',
+    ALLOW_RESET: process.env.ALLOW_RESET || 'true',
+    CHROMA_HOST: process.env.CHROMA_HOST || 'localhost',
+    CHROMA_PORT: process.env.CHROMA_PORT || '8000'
+  };
     // Combinar configurações (variáveis de ambiente têm prioridade)
     this.config = { ...this.config, ...envConfig };
 
     // Validar configuração
     if (!this.config.GITHUB_TOKEN) {
-      throw new Error('GITHUB_TOKEN não configurado! Configure no arquivo de secrets ou variáveis de ambiente.');
-    }
+    console.error('❌ GITHUB_TOKEN não configurado!');
+    console.error('💡 Configure no Render: Settings → Environment → Add GITHUB_TOKEN');
+    throw new Error('GITHUB_TOKEN não configurado');
+  }
 
     // Garantir que o repositório tenha formato correto
     if (!this.config.GITHUB_REPO.includes('/')) {
@@ -58,13 +59,13 @@ class GitHubBackupChroma {
     }
 
     this.repoUrl = `https://${this.config.GITHUB_TOKEN}@github.com/${this.config.GITHUB_REPO}.git`;
-    
-    console.log(`📁 Repositório: ${this.config.GITHUB_REPO}`);
-    console.log(`🔑 Token: ${this.config.GITHUB_TOKEN ? '✔️ Configurado' : '❌ Ausente'}`);
-    console.log(`🌐 Chroma: ${this.config.CHROMA_HOST}:${this.config.CHROMA_PORT}`);
-    
-    return this.config;
-  }
+  
+  console.log(`📁 Repositório: ${this.config.GITHUB_REPO}`);
+  console.log(`🔑 Token: ${this.config.GITHUB_TOKEN ? '✔️ Configurado' : '❌ Ausente'}`);
+  console.log(`🌐 Chroma: ${this.config.CHROMA_HOST}:${this.config.CHROMA_PORT}`);
+  
+  return this.config;
+}
 
   async executarComando(cmd, cwd = this.localPath) {
     try {
