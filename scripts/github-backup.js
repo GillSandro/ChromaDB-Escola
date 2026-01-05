@@ -72,6 +72,24 @@ class GitHubBackupChroma {
 
     return this.config;
   }
+criarClienteChroma() {
+  const isHttps = this.config.CHROMA_PORT === '443' || 
+                  this.config.CHROMA_HOST.includes('render.com');
+  
+  return new ChromaClient({
+    host: this.config.CHROMA_HOST,
+    port: parseInt(this.config.CHROMA_PORT),
+    ssl: isHttps,
+    fetchOptions: {
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      }
+    }
+  });
+}
+
+  
 
   async executarComando(cmd, cwd = this.localPath) {
     try {
@@ -196,15 +214,7 @@ class GitHubBackupChroma {
       console.log('⚠️  GITHUB_TOKEN não configurado - Pulando backup');
       return null;
     }
-    
- const client = new ChromaClient({
-  path: `${this.config.CHROMA_HOST}:${this.config.CHROMA_PORT}`,
-  fetchOptions: {
-    headers: {
-      'Content-Type': 'application/json',
-    }
-  }
-});
+const client = this.criarClienteChroma();
 
     try {
       const colecoes = await client.listCollections();
@@ -286,16 +296,8 @@ class GitHubBackupChroma {
       const backupData = JSON.parse(data);
       
       console.log(`📁 Backup encontrado: ${backupData.totalColecoes} coleções (${backupData.timestamp})`);
-      
-const client = new ChromaClient({
-  path: `${this.config.CHROMA_HOST}:${this.config.CHROMA_PORT}`,
-  fetchOptions: {
-    headers: {
-      'Content-Type': 'application/json',
-    }
-  }
-});
 
+const client = this.criarClienteChroma();
       let totalRestaurado = 0;
 
       for (const colecaoBackup of backupData.colecoes) {
@@ -367,15 +369,7 @@ const client = new ChromaClient({
       console.log('⚠️  Sem GITHUB_TOKEN - Apenas verificando ChromaDB local');
       
       try {
-     const client = new ChromaClient({
-  path: `${this.config.CHROMA_HOST}:${this.config.CHROMA_PORT}`,
-  fetchOptions: {
-    headers: {
-      'Content-Type': 'application/json',
-    }
-  }
-});
-        
+const client = this.criarClienteChroma();  // ← APENAS ESTA LINHA!
         const colecoes = await client.listCollections();
         console.log(`📊 ChromaDB local: ${colecoes.length} coleções`);
         return true; // Retorna true mesmo se vazio
@@ -386,15 +380,7 @@ const client = new ChromaClient({
       }
     }
     
-const client = new ChromaClient({
-  path: `${this.config.CHROMA_HOST}:${this.config.CHROMA_PORT}`,
-  fetchOptions: {
-    headers: {
-      'Content-Type': 'application/json',
-    }
-  }
-});
-
+const client = this.criarClienteChroma();
     try {
       const colecoes = await client.listCollections();
       console.log(`📊 Coleções encontradas: ${colecoes.length}`);
