@@ -1,42 +1,31 @@
 #!/bin/sh
 set -e
 
-echo "🚀 Iniciando ChromaDB com sistema de backup GitHub..."
-echo "📁 Repositório: GillSandro/Vetor_escola_bck"
+echo "🚀 ChromaDB iniciado automaticamente pela imagem oficial"
+echo "📁 Repositório de backup: GillSandro/Vetor_escola_bck"
+echo "💾 Dados salvos em: /data"
 
-# Configurar diretório de persistência
-export PERSIST_DIRECTORY=/data
-mkdir -p /data
+# Aguardar ChromaDB iniciar completamente
+echo "⏳ Aguardando ChromaDB estar pronto (10 segundos)..."
+sleep 10
 
-echo "⚡ Iniciando ChromaDB..."
-echo "📁 Diretório de dados: /data"
-
-# Iniciar ChromaDB usando uvicorn (forma correta para versão atual)
-uvicorn chromadb.app:app --host 0.0.0.0 --port 8000 --workers 1 &
-
-# Aguardar ChromaDB iniciar
-echo "⏳ Aguardando ChromaDB iniciar (20 segundos)..."
-sleep 20
-
-# Verificar se ChromaDB está respondendo
-echo "🔍 Verificando se ChromaDB está online..."
+# Verificar se está respondendo
+echo "🔍 Verificando conexão com ChromaDB..."
 if curl -s http://localhost:8000/api/v1/heartbeat > /dev/null; then
-    echo "✅ ChromaDB está respondendo!"
+    echo "✅ ChromaDB está online e respondendo!"
 else
-    echo "❌ ChromaDB não está respondendo. Tentando continuar..."
+    echo "⚠️  ChromaDB não respondeu. Iniciando sistema de backup mesmo assim..."
 fi
 
 # Inicializar sistema de backup
-echo "🔧 Inicializando sistema de backup..."
+echo "🔧 Inicializando sistema de backup GitHub..."
 node /app/scripts/init-backup.js
 
-# Health check simples para manter container ativo
-echo "✅ Sistema pronto e em execução!"
-echo "📊 Status:"
-echo "   - ChromaDB: rodando na porta 8000"
-echo "   - Backup: automático a cada 2 horas"
+# Manter container rodando
+echo "✅ Sistema em execução:"
+echo "   - ChromaDB: http://localhost:8000"
+echo "   - Backup automático: a cada 2 horas"
 echo "   - Repositório: GillSandro/Vetor_escola_bck"
 echo "   - Persistência: /data"
 
-# Manter container rodando
 tail -f /dev/null
