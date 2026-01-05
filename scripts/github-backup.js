@@ -1,8 +1,12 @@
 // scripts/github-backup.js
 const fs = require('fs').promises;
-const { exec } = require('child_process').promises;
+const { exec } = require('child_process');
+const util = require('util');
 const path = require('path');
 const { ChromaClient } = require('chromadb');
+
+// Promisify exec para melhor controle
+const execAsync = util.promisify(exec);
 
 class GitHubBackupChroma {
   constructor() {
@@ -15,54 +19,68 @@ class GitHubBackupChroma {
     try {
       // 1. Tentar carregar do Secret File do Render
       const secretPath = '/etc/secrets/.chroma-backup.env';
-      const content = await fs.readFile(secretPath, 'utf8');
-      
-      content.split('\n').forEach(line => {
-        const [key, value] = line.split('=');
-        if (key && value) {
-          this.config[key.trim()] = value.trim();
-        }
-      });
-      
-      console.log('✅ Configuração carregada do Secret File');
-      
+      try {
+        const content = await fs.readFile(secretPath, 'utf8');
+        content.split('\n').forEach(line => {
+          const [key, value] = line.split('=');
+          if (key && value) {
+            this.config[key.trim()] = value.trim().replace(/['"]/g, '');
+          }
+        });
+        console.log('✅ Configuração carregada do Secret File');
+      } catch (fileError) {
+        console.log('⚠️  Secret File não encontrado, usando variáveis de ambiente');
+      }
     } catch (error) {
-      console.log('⚠️  Secret File não encontrado, usando variáveis de ambiente');
-      
-      // 2. Fallback para variáveis de ambiente
-      this.config = {
-        GITHUB_TOKEN: process.env.GITHUB_TOKEN,
-        GITHUB_REPO: process.env.GITHUB_REPO || 'GillSandro/Vetor_escola_bck',
-        ALLOW_RESET: process.env.ALLOW_RESET || 'true'
-      };
+      console.error('❌ Erro ao ler configuração:', error.message);
     }
+
+    // 2. Fallback para variáveis de ambiente (sobrescrevendo valores do arquivo se necessário)
+    const envConfig = {
+      GITHUB_TOKEN: process.env.GITHUB_TOKEN,
+      GITHUB_REPO: process.env.GITHUB_REPO || 'GillSandro/Vetor_escola_bck',
+      ALLOW_RESET: process.env.ALLOW_RESET || 'true',
+      CHROMA_HOST: process.env.CHROMA_HOST || 'localhost',
+      CHROMA_PORT: process.env.CHROMA_PORT || '8000'
+    };
+
+    // Combinar configurações (variáveis de ambiente têm prioridade)
+    this.config = { ...this.config, ...envConfig };
 
     // Validar configuração
     if (!this.config.GITHUB_TOKEN) {
-      throw new Error('GITHUB_TOKEN não configurado!');
+      throw new Error('GITHUB_TOKEN não configurado! Configure no arquivo de secrets ou variáveis de ambiente.');
     }
-    
-    if (!this.config.GITHUB_REPO) {
-      this.config.GITHUB_REPO = 'GillSandro/Vetor_escola_bck';
+
+    // Garantir que o repositório tenha formato correto
+    if (!this.config.GITHUB_REPO.includes('/')) {
+      throw new Error('GITHUB_REPO deve estar no formato "usuario/repositorio"');
     }
 
     this.repoUrl = `https://${this.config.GITHUB_TOKEN}@github.com/${this.config.GITHUB_REPO}.git`;
     
     console.log(`📁 Repositório: ${this.config.GITHUB_REPO}`);
     console.log(`🔑 Token: ${this.config.GITHUB_TOKEN ? '✔️ Configurado' : '❌ Ausente'}`);
+    console.log(`🌐 Chroma: ${this.config.CHROMA_HOST}:${this.config.CHROMA_PORT}`);
     
     return this.config;
   }
 
   async executarComando(cmd, cwd = this.localPath) {
     try {
-      const { stdout, stderr } = await exec(cmd, { cwd });
-      if (stderr && !stderr.includes('warning')) {
-        console.log(`⚠️ ${cmd}:`, stderr);
+      console.log(`⚡ Executando: ${cmd}`);
+      const { stdout, stderr } = await execAsync(cmd, { cwd });
+      
+      if (stderr && !stderr.includes('warning') && !stderr.includes('Cloning')) {
+        console.log(`⚠️  Stderr: ${stderr}`);
       }
-      return stdout;
+      
+      return stdout.trim();
     } catch (error) {
       console.error(`❌ Erro no comando ${cmd}:`, error.message);
+      if (error.stderr) {
+        console.error(`❌ Detalhes: ${error.stderr}`);
+      }
       throw error;
     }
   }
@@ -71,32 +89,80 @@ class GitHubBackupChroma {
     try {
       await fs.access(this.localPath);
       console.log('🔄 Atualizando repositório local...');
+      
+      // Garantir que estamos no branch correto
+      await this.executarComando('git checkout main 2>/dev/null || git checkout -b main');
+      
+      // Limpar mudanças locais
+      await this.executarComando('git reset --hard HEAD');
+      
+      // Fetch e pull com rebase
       await this.executarComando('git fetch origin');
       await this.executarComando('git reset --hard origin/main');
+      
+      console.log('✅ Repositório atualizado');
       return true;
-    } catch {
+    } catch (error) {
       console.log('📥 Clonando repositório do GitHub...');
+      
+      // Limpar diretório se existir
+      try {
+        await fs.rm(this.localPath, { recursive: true, force: true });
+      } catch (rmError) {
+        // Ignorar erros de remoção
+      }
+      
       await this.executarComando(`git clone ${this.repoUrl} ${this.localPath}`, '.');
+      console.log('✅ Repositório clonado');
       return true;
     }
   }
 
   async salvarBackupNoGitHub(dados) {
     try {
+      console.log('💾 Salvando backup no GitHub...');
       const backupPath = path.join(this.localPath, this.backupFile);
-      await fs.writeFile(backupPath, JSON.stringify(dados, null, 2));
       
-      await this.executarComando('git config user.name "Render Backup"');
-      await this.executarComando('git config user.email "backup@render.com"');
+      // Criar backup incremental
+      const timestamp = new Date().toISOString();
+      const backupData = {
+        ...dados,
+        timestamp,
+        version: '1.0'
+      };
       
+      await fs.writeFile(backupPath, JSON.stringify(backupData, null, 2));
+      console.log(`📁 Backup salvo localmente: ${backupData.totalColecoes} coleções`);
+      
+      // Configurar git
+      await this.executarComando('git config user.name "Render Backup Bot"');
+      await this.executarComando('git config user.email "backup-bot@render.com"');
+      
+      // Fazer commit
       await this.executarComando('git add .');
-      await this.executarComando(`git commit -m "Backup Chroma - ${new Date().toISOString().split('T')[0]}"`);
+      const commitMessage = `Backup ChromaDB - ${timestamp}`;
+      await this.executarComando(`git commit -m "${commitMessage}" --allow-empty`);
+      
+      // Fazer push
       await this.executarComando('git push origin main');
       
       console.log('✅ Backup salvo no GitHub!');
       return true;
     } catch (error) {
       console.error('❌ Erro ao salvar no GitHub:', error.message);
+      
+      // Tentar fazer push forçado em caso de conflito
+      if (error.message.includes('failed to push') || error.message.includes('rejected')) {
+        console.log('🔄 Tentando push forçado...');
+        try {
+          await this.executarComando('git push --force-with-lease origin main');
+          console.log('✅ Push forçado bem-sucedido');
+          return true;
+        } catch (forceError) {
+          console.error('❌ Falha no push forçado:', forceError.message);
+        }
+      }
+      
       return false;
     }
   }
@@ -107,14 +173,19 @@ class GitHubBackupChroma {
     await this.carregarConfig();
     
     const client = new ChromaClient({
-      host: 'localhost',
-      port: 8000,
+      host: this.config.CHROMA_HOST,
+      port: this.config.CHROMA_PORT,
     });
 
     try {
       const colecoes = await client.listCollections();
       console.log(`📊 Coleções encontradas: ${colecoes.length}`);
       
+      if (colecoes.length === 0) {
+        console.log('⚠️  Nenhuma coleção encontrada no ChromaDB');
+        return null;
+      }
+
       const backupData = {
         timestamp: new Date().toISOString(),
         totalColecoes: colecoes.length,
@@ -124,24 +195,33 @@ class GitHubBackupChroma {
       for (const colecaoInfo of colecoes) {
         console.log(`  📦 Processando: ${colecaoInfo.name}...`);
         
-        const colecao = await client.getCollection({
-          name: colecaoInfo.name
-        });
+        try {
+          const colecao = await client.getCollection({
+            name: colecaoInfo.name
+          });
 
-        const todosDados = await colecao.get({});
-        
-        backupData.colecoes.push({
-          nome: colecaoInfo.name,
-          metadata: colecaoInfo.metadata,
-          totalDocumentos: todosDados.ids.length,
-          dados: {
-            ids: todosDados.ids,
-            documents: todosDados.documents,
-            metadatas: todosDados.metadatas
-          }
-        });
-        
-        console.log(`    ✅ ${todosDados.ids.length} documentos`);
+          const todosDados = await colecao.get({
+            include: ['documents', 'metadatas', 'embeddings']
+          });
+          
+          // Extrair apenas dados essenciais
+          const colecaoBackup = {
+            nome: colecaoInfo.name,
+            metadata: colecaoInfo.metadata || {},
+            totalDocumentos: todosDados.ids.length,
+            dados: {
+              ids: todosDados.ids || [],
+              documents: todosDados.documents || [],
+              metadatas: todosDados.metadatas || []
+            }
+          };
+          
+          backupData.colecoes.push(colecaoBackup);
+          console.log(`    ✅ ${colecaoBackup.totalDocumentos} documentos`);
+        } catch (error) {
+          console.error(`    ❌ Erro ao processar coleção ${colecaoInfo.name}:`, error.message);
+          continue;
+        }
       }
 
       await this.atualizarRepo();
@@ -150,7 +230,7 @@ class GitHubBackupChroma {
       return salvo ? backupData : null;
       
     } catch (error) {
-      console.error('❌ Erro no backup:', error.message);
+      console.error('❌ Erro no backup do ChromaDB:', error.message);
       return null;
     }
   }
@@ -167,11 +247,11 @@ class GitHubBackupChroma {
       const data = await fs.readFile(backupPath, 'utf8');
       const backupData = JSON.parse(data);
       
-      console.log(`📁 Backup encontrado: ${backupData.totalColecoes} coleções`);
+      console.log(`📁 Backup encontrado: ${backupData.totalColecoes} coleções (${backupData.timestamp})`);
       
       const client = new ChromaClient({
-        host: 'localhost',
-        port: 8000,
+        host: this.config.CHROMA_HOST,
+        port: this.config.CHROMA_PORT,
       });
 
       let totalRestaurado = 0;
@@ -180,17 +260,22 @@ class GitHubBackupChroma {
         console.log(`🔧 Restaurando: ${colecaoBackup.nome} (${colecaoBackup.totalDocumentos} docs)...`);
         
         try {
+          // Tentar deletar coleção existente
           await client.deleteCollection({ name: colecaoBackup.nome });
-        } catch (e) {
-          // Ignorar se não existir
+          console.log(`    ♻️  Coleção antiga removida: ${colecaoBackup.nome}`);
+        } catch (deleteError) {
+          // Coleção não existia, continuar normalmente
+          console.log(`    📝 Criando nova coleção: ${colecaoBackup.nome}`);
         }
 
+        // Criar nova coleção
         const colecao = await client.createCollection({
           name: colecaoBackup.nome,
-          metadata: colecaoBackup.metadata
+          metadata: colecaoBackup.metadata || {}
         });
 
-        const batchSize = 50;
+        // Restaurar documentos em lotes
+        const batchSize = 100;
         const totalDocs = colecaoBackup.dados.ids.length;
         
         for (let i = 0; i < totalDocs; i += batchSize) {
@@ -199,24 +284,29 @@ class GitHubBackupChroma {
           const batchMetas = colecaoBackup.dados.metadatas.slice(i, i + batchSize);
           
           if (batchIds.length > 0) {
-            await colecao.add({
-              ids: batchIds,
-              documents: batchDocs,
-              metadatas: batchMetas
-            });
+            try {
+              await colecao.add({
+                ids: batchIds,
+                documents: batchDocs,
+                metadatas: batchMetas
+              });
+            } catch (batchError) {
+              console.error(`    ⚠️  Erro no batch ${i}-${i + batchSize}:`, batchError.message);
+              // Continuar com os próximos lotes
+            }
           }
           
           const progress = Math.min(i + batchSize, totalDocs);
-          if (progress % 100 === 0 || progress === totalDocs) {
-            console.log(`    📊 ${progress}/${totalDocs} documentos...`);
+          if (progress % 500 === 0 || progress === totalDocs) {
+            console.log(`    📊 Progresso: ${progress}/${totalDocs} documentos`);
           }
         }
         
         totalRestaurado += totalDocs;
-        console.log(`    ✅ ${colecaoBackup.nome} restaurada`);
+        console.log(`    ✅ ${colecaoBackup.nome} restaurada com ${totalDocs} documentos`);
       }
 
-      console.log(`🎯 TOTAL RESTAURADO: ${totalRestaurado} documentos`);
+      console.log(`🎯 TOTAL RESTAURADO: ${totalRestaurado} documentos em ${backupData.totalColecoes} coleções`);
       return totalRestaurado;
       
     } catch (error) {
@@ -231,16 +321,16 @@ class GitHubBackupChroma {
     await this.carregarConfig();
     
     const client = new ChromaClient({
-      host: 'localhost',
-      port: 8000,
+      host: this.config.CHROMA_HOST,
+      port: this.config.CHROMA_PORT,
     });
 
     try {
       const colecoes = await client.listCollections();
-      const colecaoPrincipal = colecoes.find(c => c.name === 'regras_sistema');
+      console.log(`📊 Coleções encontradas: ${colecoes.length}`);
       
-      if (!colecaoPrincipal || colecoes.length === 0) {
-        console.log('⚠️  ChromaDB vazio ou sem coleção principal');
+      if (colecoes.length === 0) {
+        console.log('⚠️  ChromaDB vazio. Restaurando do GitHub...');
         const restaurado = await this.restaurarDoGitHub();
         if (restaurado > 0) {
           console.log('✅ Dados restaurados do GitHub com sucesso!');
@@ -251,15 +341,29 @@ class GitHubBackupChroma {
         }
       }
       
-      // Verificar se tem documentos
-      const colecao = await client.getCollection({ name: 'regras_sistema' });
-      const totalDocs = await colecao.count();
-      
-      console.log(`✅ ChromaDB OK: ${totalDocs} documentos em "regras_sistema"`);
-      return true;
+      // Verificar coleção principal
+      let colecaoPrincipal;
+      try {
+        colecaoPrincipal = await client.getCollection({ name: 'regras_sistema' });
+        const totalDocs = await colecaoPrincipal.count();
+        
+        if (totalDocs === 0) {
+          console.log('⚠️  Coleção "regras_sistema" vazia. Restaurando...');
+          const restaurado = await this.restaurarDoGitHub();
+          return restaurado > 0;
+        }
+        
+        console.log(`✅ ChromaDB OK: ${totalDocs} documentos em "regras_sistema"`);
+        return true;
+      } catch (error) {
+        console.log('⚠️  Coleção "regras_sistema" não encontrada. Restaurando...');
+        const restaurado = await this.restaurarDoGitHub();
+        return restaurado > 0;
+      }
       
     } catch (error) {
       console.error('❌ Erro ao verificar ChromaDB:', error.message);
+      console.log('🔄 Tentando restaurar do GitHub...');
       const restaurado = await this.restaurarDoGitHub();
       return restaurado > 0;
     }
@@ -270,33 +374,56 @@ class GitHubBackupChroma {
 if (require.main === module) {
   const backup = new GitHubBackupChroma();
   
-  const comando = process.argv[2];
+  const comando = process.argv[2] || 'check';
   
-  if (comando === 'backup') {
-    backup.fazerBackupChroma().then(result => {
-      if (result) {
-        console.log('✅ Backup concluído com sucesso!');
-        process.exit(0);
-      } else {
-        console.error('❌ Falha no backup');
-        process.exit(1);
+  (async () => {
+    try {
+      switch (comando) {
+        case 'backup':
+          const result = await backup.fazerBackupChroma();
+          if (result) {
+            console.log('✅ Backup concluído com sucesso!');
+            process.exit(0);
+          } else {
+            console.error('❌ Falha no backup');
+            process.exit(1);
+          }
+          break;
+          
+        case 'restore':
+          const total = await backup.restaurarDoGitHub();
+          if (total > 0) {
+            console.log('✅ Restauração concluída!');
+            process.exit(0);
+          } else {
+            console.error('❌ Falha na restauração');
+            process.exit(1);
+          }
+          break;
+          
+        case 'check':
+          const ok = await backup.verificarERestaurar();
+          if (ok) {
+            console.log('✅ Verificação concluída - ChromaDB OK');
+            process.exit(0);
+          } else {
+            console.error('⚠️  ChromaDB precisa de atenção');
+            process.exit(1);
+          }
+          break;
+          
+        default:
+          console.log('Comandos disponíveis:');
+          console.log('  node github-backup.js backup    - Fazer backup do ChromaDB');
+          console.log('  node github-backup.js restore   - Restaurar do backup no GitHub');
+          console.log('  node github-backup.js check     - Verificar e restaurar se necessário (padrão)');
+          process.exit(0);
       }
-    });
-  } else if (comando === 'restore') {
-    backup.restaurarDoGitHub().then(total => {
-      if (total > 0) {
-        console.log('✅ Restauração concluída!');
-        process.exit(0);
-      } else {
-        console.error('❌ Falha na restauração');
-        process.exit(1);
-      }
-    });
-  } else {
-    console.log('Comandos disponíveis:');
-    console.log('  node github-backup.js backup    - Fazer backup');
-    console.log('  node github-backup.js restore   - Restaurar do backup');
-  }
+    } catch (error) {
+      console.error('❌ Erro fatal:', error.message);
+      process.exit(1);
+    }
+  })();
 } else {
   module.exports = GitHubBackupChroma;
 }
