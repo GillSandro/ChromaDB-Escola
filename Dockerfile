@@ -25,15 +25,18 @@ RUN mkdir -p /app/scripts /data
 
 WORKDIR /app
 
-# Copiar scripts de backup
-COPY scripts/ ./scripts/
+# Copiar TUDO do diretório atual para /app
+COPY . .
 
 # Dar permissão de execução
 RUN chmod +x /app/scripts/entrypoint.sh
 
 # Instalar dependências Node.js para backup
 WORKDIR /app/scripts
-RUN npm init -y && npm install chromadb axios
+RUN npm init -y && npm install chromadb
 
-# Script de inicialização
-ENTRYPOINT ["/bin/sh", "/app/scripts/entrypoint.sh"]
+# Voltar para diretório raiz do app
+WORKDIR /app
+
+# Script de inicialização que executa restore e inicia ChromaDB
+CMD ["sh", "-c", "node scripts/github-backup.js restore && chroma run --host 0.0.0.0 --port 8000 --path /data"]
