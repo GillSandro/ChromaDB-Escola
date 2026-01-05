@@ -1,31 +1,40 @@
 #!/bin/sh
 set -e
 
-echo "🚀 ChromaDB iniciado automaticamente pela imagem oficial"
-echo "📁 Repositório de backup: GillSandro/Vetor_escola_bck"
-echo "💾 Dados salvos em: /data"
+echo "========================================="
+echo "🚀 CHROMADB COM BACKUP GITHUB"
+echo "========================================="
+echo "📁 Backup repo: GillSandro/Vetor_escola_bck"
+echo "💾 Dados em: /data"
+echo "🌐 URL: http://localhost:8000"
+echo "========================================="
 
-# Aguardar ChromaDB iniciar completamente
-echo "⏳ Aguardando ChromaDB estar pronto (10 segundos)..."
-sleep 10
+# ChromaDB já inicia automaticamente na imagem oficial
+# Apenas aguardar ele estar pronto
+echo "⏳ Aguardando ChromaDB iniciar (15 segundos)..."
+sleep 15
 
-# Verificar se está respondendo
-echo "🔍 Verificando conexão com ChromaDB..."
-if curl -s http://localhost:8000/api/v1/heartbeat > /dev/null; then
-    echo "✅ ChromaDB está online e respondendo!"
+# Verificar se está respondendo (tentativa simples)
+echo "🔍 Testando conexão com ChromaDB..."
+if curl -s -f http://localhost:8000/api/v1/heartbeat > /dev/null 2>&1; then
+    echo "✅ ChromaDB ONLINE!"
 else
-    echo "⚠️  ChromaDB não respondeu. Iniciando sistema de backup mesmo assim..."
+    echo "⚠️  ChromaDB pode não estar respondendo, mas continuando..."
 fi
 
-# Inicializar sistema de backup
-echo "🔧 Inicializando sistema de backup GitHub..."
-node /app/scripts/init-backup.js
+# Iniciar sistema de backup
+echo "🔧 Iniciando sistema de backup GitHub..."
+cd /app/scripts
+node init-backup.js
 
 # Manter container rodando
-echo "✅ Sistema em execução:"
-echo "   - ChromaDB: http://localhost:8000"
-echo "   - Backup automático: a cada 2 horas"
-echo "   - Repositório: GillSandro/Vetor_escola_bck"
-echo "   - Persistência: /data"
+echo "========================================="
+echo "✅ SISTEMA OPERACIONAL"
+echo "========================================="
+echo "ChromaDB: http://localhost:8000"
+echo "Backup: automático a cada 2h"
+echo "Repo: GillSandro/Vetor_escola_bck"
+echo "========================================="
 
-tail -f /dev/null
+# Manter container vivo
+exec tail -f /dev/null
