@@ -16,4 +16,19 @@ services:
 
       - key: CHROMA_API_IMPL
         value: "chromadb.api.fastapi.FastAPI"
+        
+    # Configurações de backup no GitHub
+    secretFiles:
+      - name: .chroma-backup.env
+        mountPath: /etc/secrets
+    
+    # Disco persistente para dados do Chroma
+    disk:
+      name: chroma-data
+      mountPath: /data
+      sizeGB: 1
+    
+    # Health check para evitar hibernação
+    healthCheckPath: /api/v1/heartbeat
+    autoDeploy: true        
 
