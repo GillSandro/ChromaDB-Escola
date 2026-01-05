@@ -1,4 +1,7 @@
-FROM chromadb/chroma:latest
+FROM python:3.11-slim-bookworm
+
+# Instalar ChromaDB diretamente via pip
+RUN pip install chromadb
 
 # Variáveis de ambiente do ChromaDB
 ENV CHROMA_SERVER_HOST=0.0.0.0
@@ -10,20 +13,20 @@ ENV PERSIST_DIRECTORY=/data
 EXPOSE 8000
 
 # Instalar Node.js e dependências para backup
-USER root
 RUN apt-get update && apt-get install -y \
     nodejs \
     npm \
     git \
-    wget \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Criar diretório para scripts de backup
-RUN mkdir -p /app/scripts
+RUN mkdir -p /app/scripts /data
+
+WORKDIR /app
 
 # Copiar scripts de backup
-COPY scripts/ /app/scripts/
+COPY scripts/ ./scripts/
 
 # Dar permissão de execução
 RUN chmod +x /app/scripts/entrypoint.sh
@@ -32,9 +35,5 @@ RUN chmod +x /app/scripts/entrypoint.sh
 WORKDIR /app/scripts
 RUN npm init -y && npm install chromadb axios
 
-# Voltar para o diretório do Chroma
-WORKDIR /chroma
-
 # Script de inicialização
 ENTRYPOINT ["/app/scripts/entrypoint.sh"]
-
