@@ -21,21 +21,22 @@ RUN mkdir -p /app /data
 
 WORKDIR /app
 
-# 5. Copiar entrypoint da RAIZ (o novo)
+# 5. Copiar entrypoint da RAIZ (o seu que já está correto)
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 # 6. Copiar scripts
 COPY scripts/ ./scripts/
 
-# 7. REMOVER automaticamente o entrypoint duplicado
+# 7. REMOVER automaticamente o entrypoint duplicado dos scripts
 RUN rm -f /app/scripts/entrypoint.sh
 
 # 8. Instalar dependências Node dos scripts
 WORKDIR /app/scripts
 RUN npm init -y --silent && npm install chromadb dotenv
 
+# 9. Voltar para diretório principal
 WORKDIR /app
 
-# 9. Usar entrypoint da raiz
+# 10. Usar entrypoint da raiz
 ENTRYPOINT ["/app/entrypoint.sh"]
