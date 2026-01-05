@@ -2,18 +2,15 @@
 set -e
 
 echo "========================================="
-echo "🚀 INICIANDO CHROMADB NO RENDER"
+echo "🚀 INICIANDO CHROMADB"
 echo "========================================="
 
-# Remover variável problemática que causa erro no ChromaDB
-unset CHROMA_SERVER_CORS_ALLOW_ORIGINS
-
-# Forçar valor correto
+# Configurar CORS
 export CHROMA_SERVER_CORS_ALLOW_ORIGINS='["*"]'
 
 # Criar diretório de dados
 mkdir -p /data
 
-# Iniciar ChromaDB
+# Iniciar ChromaDB (APENAS ISSO)
 echo "⚡ Iniciando servidor ChromaDB..."
 exec chroma run --host 0.0.0.0 --port 8000 --path /data
