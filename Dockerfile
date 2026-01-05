@@ -1,42 +1,23 @@
 FROM python:3.11-slim-bookworm
 
-# Instalar ChromaDB diretamente via pip
+# Instalar apenas ChromaDB
 RUN pip install chromadb
 
-# Variáveis de ambiente do ChromaDB
+# Variáveis de ambiente
 ENV CHROMA_SERVER_HOST=0.0.0.0
 ENV CHROMA_SERVER_HTTP_PORT=8000
-ENV CHROMA_SERVER_CORS_ALLOW_ORIGINS=
-ENV ALLOW_RESET=true
 ENV PERSIST_DIRECTORY=/data
 
 EXPOSE 8000
 
-# Instalar Node.js e dependências para backup
-RUN apt-get update && apt-get install -y \
-    nodejs \
-    npm \
-    git \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Criar diretório para scripts de backup
-RUN mkdir -p /app/scripts /data
+# Criar diretórios
+RUN mkdir -p /app /data
 
 WORKDIR /app
 
-# Copiar scripts de backup PRIMEIRO
-COPY scripts/ ./scripts/
+# Copiar APENAS o entrypoint
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
-# Dar permissão de execução
-RUN chmod +x /app/scripts/entrypoint.sh
-
-# Instalar dependências Node.js para backup
-WORKDIR /app/scripts
-RUN npm init -y && npm install chromadb
-
-# Voltar para diretório raiz
-WORKDIR /app
-
-# Usar entrypoint.sh como script de inicialização
-ENTRYPOINT ["/app/scripts/entrypoint.sh"]
+# Definir entrypoint
+ENTRYPOINT ["/app/entrypoint.sh"]
