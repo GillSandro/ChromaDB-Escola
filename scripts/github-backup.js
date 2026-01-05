@@ -197,10 +197,14 @@ class GitHubBackupChroma {
       return null;
     }
     
-    const client = new ChromaClient({
-      host: this.config.CHROMA_HOST,
-      port: this.config.CHROMA_PORT,
-    });
+ const client = new ChromaClient({
+  path: `${this.config.CHROMA_HOST}:${this.config.CHROMA_PORT}`,
+  fetchOptions: {
+    headers: {
+      'Content-Type': 'application/json',
+    }
+  }
+});
 
     try {
       const colecoes = await client.listCollections();
@@ -283,10 +287,14 @@ class GitHubBackupChroma {
       
       console.log(`📁 Backup encontrado: ${backupData.totalColecoes} coleções (${backupData.timestamp})`);
       
-      const client = new ChromaClient({
-        host: this.config.CHROMA_HOST,
-        port: this.config.CHROMA_PORT,
-      });
+const client = new ChromaClient({
+  path: `${this.config.CHROMA_HOST}:${this.config.CHROMA_PORT}`,
+  fetchOptions: {
+    headers: {
+      'Content-Type': 'application/json',
+    }
+  }
+});
 
       let totalRestaurado = 0;
 
